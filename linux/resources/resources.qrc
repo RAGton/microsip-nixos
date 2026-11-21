@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="/icons">
+    <file alias="microsip.svg">microsip.svg</file>
+  </qresource>
+</RCC>

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=MicroSIP
+GenericName=SIP Softphone
+Comment=Lightweight native SIP softphone based on PJSIP and Qt 6
+Exec=microsip-qt %u
+Icon=microsip-qt
+Terminal=false
+Type=Application
+Categories=Network;Telephony;AudioVideo;
+MimeType=x-scheme-handler/sip;x-scheme-handler/sips;x-scheme-handler/tel;x-scheme-handler/callto;
+StartupWMClass=microsip-qt
