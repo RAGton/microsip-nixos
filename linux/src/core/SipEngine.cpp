@@ -24,9 +24,11 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QMetaObject>
 #include <QRegularExpression>
+#include <QTextStream>
 
 namespace msip {
 
@@ -338,12 +340,40 @@ void SipEngine::unregisterAccount() {
     m_registered = false;
 }
 
+static QHash<QString, QString> readAlsaCardNames() {
+    QHash<QString, QString> map;
+    QFile f("/proc/asound/cards");
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return map;
+
+    QRegularExpression re(R"(^\s*\d+\s+\[([^\]]+)\]:\s*[^-]+-\s*(.+)$)");
+    QTextStream in(&f);
+    while (!in.atEnd()) {
+        QString line = in.readLine();
+        auto m = re.match(line);
+        if (m.hasMatch()) {
+            QString cardId = m.captured(1).trimmed();
+            QString friendly = m.captured(2).trimmed();
+            map.insert(cardId, friendly);
+        }
+    }
+    return map;
+}
+
 QVector<AudioDeviceInfo> SipEngine::audioDevices() const {
     QVector<AudioDeviceInfo> list;
     if (!m_running) return list;
 
-    pjmedia_aud_dev_info infos[64];
-    unsigned count = 64;
+    auto cardNames = readAlsaCardNames();
+    static const QStringList hiddenPrefixes = {
+        "surround", "front:", "rear:", "center_lfe:", "side:",
+        "iec958:", "spdif:", "dmix:", "dsnoop:", "usbstream:",
+        "upmix", "vdownmix", "speex", "samplerate", "lavrate",
+        "oss", "null", "jack", "hdmi:", "hw:", "plughw:"
+    };
+    QRegularExpression cardRe(R"(CARD=([^,\s]+))");
+
+    pjmedia_aud_dev_info infos[128];
+    unsigned count = 128;
     if (pjsua_enum_aud_devs(infos, &count) == PJ_SUCCESS) {
         for (unsigned i = 0; i < count; ++i) {
             AudioDeviceInfo dev;
@@ -352,6 +382,39 @@ QVector<AudioDeviceInfo> SipEngine::audioDevices() const {
             dev.driver = QString::fromUtf8(infos[i].driver);
             dev.inputCount = infos[i].input_count;
             dev.outputCount = infos[i].output_count;
+
+            QString lower = dev.name.toLower();
+            dev.isAdvanced = false;
+            for (const QString& pref : hiddenPrefixes) {
+                if (lower.startsWith(pref)) {
+                    dev.isAdvanced = true;
+                    break;
+                }
+            }
+
+            if (lower == "pipewire") {
+                dev.displayName = "PipeWire (Recomendado)";
+            } else if (lower == "pulse") {
+                dev.displayName = "PulseAudio";
+            } else if (lower == "default") {
+                dev.displayName = "Padrão do Sistema (ALSA/PipeWire)";
+            } else if (lower == "sysdefault") {
+                dev.displayName = "Dispositivo Padrão do Sistema";
+            } else {
+                auto cm = cardRe.match(dev.name);
+                if (cm.hasMatch()) {
+                    QString cardId = cm.captured(1);
+                    QString friendly = cardNames.value(cardId, cardId);
+                    if (lower.startsWith("sysdefault:")) {
+                        dev.displayName = friendly;
+                    } else {
+                        dev.displayName = QString("%1 [%2]").arg(friendly, dev.name);
+                    }
+                } else {
+                    dev.displayName = dev.name;
+                }
+            }
+
             list.push_back(dev);
         }
     }

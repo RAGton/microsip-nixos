@@ -88,7 +88,33 @@ inline QString buildAppStyleSheet(bool dark) {
                 background-color: #252a33;
                 color: #f0f4f8;
                 border: 1px solid #3b82f6;
-                selection-background-color: #2f5fb8;
+                border-radius: 6px;
+                padding: 4px;
+                outline: 0;
+                selection-background-color: #2563eb;
+                selection-color: #ffffff;
+            }
+            QComboBox QAbstractItemView::item {
+                min-height: 26px;
+                padding: 4px 8px;
+                border-radius: 4px;
+            }
+            QScrollBar:vertical {
+                background: #1e222a;
+                width: 8px;
+                margin: 2px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical {
+                background: #475569;
+                min-height: 24px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #64748b;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
             }
             QPushButton {
                 background-color: #2b313c;

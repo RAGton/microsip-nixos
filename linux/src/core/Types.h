@@ -167,9 +167,11 @@ struct ActiveCallInfo {
 struct AudioDeviceInfo {
     int id = -1;
     QString name;
+    QString displayName;
     QString driver;
     unsigned inputCount = 0;
     unsigned outputCount = 0;
+    bool isAdvanced = false;
 };
 
 } // namespace msip

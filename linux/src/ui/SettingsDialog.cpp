@@ -26,6 +26,7 @@
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QPushButton>
+#include <QSet>
 #include <QTabWidget>
 #include <QVBoxLayout>
 
@@ -35,13 +36,13 @@ SettingsDialog::SettingsDialog(Settings* settings, SipEngine* engine, QWidget* p
     : QDialog(parent)
     , m_settings(settings)
     , m_engine(engine) {
-    setWindowTitle(tr("Settings"));
-    setMinimumSize(460, 440);
+    setWindowTitle(tr("Configurações"));
+    setMinimumSize(500, 480);
 
     auto* root = new QVBoxLayout(this);
     auto* tabs = new QTabWidget(this);
 
-    // --- Tab 1: Audio ---
+    // --- Aba 1: Áudio & Gravação ---
     {
         auto* page = new QWidget(this);
         auto* form = new QFormLayout(page);
@@ -49,34 +50,19 @@ SettingsDialog::SettingsDialog(Settings* settings, SipEngine* engine, QWidget* p
         m_ringDevCombo = new QComboBox(page);
         m_outDevCombo = new QComboBox(page);
         m_inDevCombo = new QComboBox(page);
-        m_ringDevCombo->addItem(tr("Default"), "");
-        m_outDevCombo->addItem(tr("Default"), "");
-        m_inDevCombo->addItem(tr("Default"), "");
 
-        for (const auto& d : m_engine->audioDevices()) {
-            if (d.outputCount > 0) {
-                m_ringDevCombo->addItem(d.name, d.name);
-                m_outDevCombo->addItem(d.name, d.name);
-            }
-            if (d.inputCount > 0) {
-                m_inDevCombo->addItem(d.name, d.name);
-            }
-        }
-        auto selectCombo = [](QComboBox* cb, const QString& val) {
-            int idx = cb->findData(val);
-            if (idx >= 0) cb->setCurrentIndex(idx);
-        };
-        selectCombo(m_ringDevCombo, m_settings->audioRingDevice);
-        selectCombo(m_outDevCombo, m_settings->audioOutputDevice);
-        selectCombo(m_inDevCombo, m_settings->audioInputDevice);
+        m_showAdvAudioCheck = new QCheckBox(tr("Mostrar dispositivos ALSA avançados"), page);
+        connect(m_showAdvAudioCheck, &QCheckBox::toggled, this, &SettingsDialog::populateAudioCombos);
+
+        populateAudioCombos(false);
 
         auto* ringRow = new QHBoxLayout();
         m_ringtoneEdit = new QLineEdit(m_settings->ringtone, page);
-        m_ringtoneEdit->setPlaceholderText(tr("Built-in tone (or choose .wav)"));
+        m_ringtoneEdit->setPlaceholderText(tr("Toque interno (ou selecione um .wav)"));
         auto* ringBrowse = new QPushButton(tr("..."), page);
         ringBrowse->setMaximumWidth(36);
         connect(ringBrowse, &QPushButton::clicked, this, [this]() {
-            QString f = QFileDialog::getOpenFileName(this, tr("Select Ringtone"), QString(), tr("WAV Audio (*.wav)"));
+            QString f = QFileDialog::getOpenFileName(this, tr("Selecionar Toque"), QString(), tr("Áudio WAV (*.wav)"));
             if (!f.isEmpty()) m_ringtoneEdit->setText(f);
         });
         ringRow->addWidget(m_ringtoneEdit, 1);
@@ -102,9 +88,9 @@ SettingsDialog::SettingsDialog(Settings* settings, SipEngine* engine, QWidget* p
             }
         }
 
-        m_vadCheck = new QCheckBox(tr("Voice Activity Detection (VAD)"), page);
+        m_vadCheck = new QCheckBox(tr("Detecção de Voz (VAD)"), page);
         m_vadCheck->setChecked(m_settings->vad);
-        m_ecCheck = new QCheckBox(tr("Echo Cancellation (EC)"), page);
+        m_ecCheck = new QCheckBox(tr("Cancelamento de Eco (EC)"), page);
         m_ecCheck->setChecked(m_settings->ec);
 
         auto* recRow = new QHBoxLayout();
@@ -112,29 +98,30 @@ SettingsDialog::SettingsDialog(Settings* settings, SipEngine* engine, QWidget* p
         auto* recBrowse = new QPushButton(tr("..."), page);
         recBrowse->setMaximumWidth(36);
         connect(recBrowse, &QPushButton::clicked, this, [this]() {
-            QString dir = QFileDialog::getExistingDirectory(this, tr("Recording Folder"), m_recPathEdit->text());
+            QString dir = QFileDialog::getExistingDirectory(this, tr("Pasta de Gravações"), m_recPathEdit->text());
             if (!dir.isEmpty()) m_recPathEdit->setText(dir);
         });
         recRow->addWidget(m_recPathEdit, 1);
         recRow->addWidget(recBrowse);
 
-        m_autoRecCheck = new QCheckBox(tr("Auto-Record all calls (WAV)"), page);
+        m_autoRecCheck = new QCheckBox(tr("Gravar todas as chamadas automaticamente (WAV)"), page);
         m_autoRecCheck->setChecked(m_settings->autoRecording);
 
-        form->addRow(tr("Ring Device:"), m_ringDevCombo);
-        form->addRow(tr("Speaker:"), m_outDevCombo);
-        form->addRow(tr("Microphone:"), m_inDevCombo);
-        form->addRow(tr("Ringtone:"), ringRow);
-        form->addRow(tr("Audio Codecs:"), m_codecsList);
+        form->addRow(tr("Campainha:"), m_ringDevCombo);
+        form->addRow(tr("Alto-falante:"), m_outDevCombo);
+        form->addRow(tr("Microfone:"), m_inDevCombo);
+        form->addRow("", m_showAdvAudioCheck);
+        form->addRow(tr("Toque:"), ringRow);
+        form->addRow(tr("Codecs de Áudio:"), m_codecsList);
         form->addRow("", m_vadCheck);
         form->addRow("", m_ecCheck);
-        form->addRow(tr("Recordings Path:"), recRow);
+        form->addRow(tr("Pasta de Gravações:"), recRow);
         form->addRow("", m_autoRecCheck);
 
-        tabs->addTab(page, tr("Audio & Recording"));
+        tabs->addTab(page, tr("Áudio & Gravação"));
     }
 
-    // --- Tab 2: Network & SIP ---
+    // --- Aba 2: Rede & SIP ---
     {
         auto* page = new QWidget(this);
         auto* form = new QFormLayout(page);
@@ -142,34 +129,34 @@ SettingsDialog::SettingsDialog(Settings* settings, SipEngine* engine, QWidget* p
         m_sourcePortSpin = new QSpinBox(page);
         m_sourcePortSpin->setRange(0, 65535);
         m_sourcePortSpin->setValue(m_settings->sourcePort);
-        m_sourcePortSpin->setSpecialValueText(tr("Random (0)"));
+        m_sourcePortSpin->setSpecialValueText(tr("Aleatória (0)"));
 
-        m_enableStunCheck = new QCheckBox(tr("Enable STUN Server"), page);
+        m_enableStunCheck = new QCheckBox(tr("Habilitar Servidor STUN"), page);
         m_enableStunCheck->setChecked(m_settings->enableStun);
         m_stunEdit = new QLineEdit(m_settings->stun, page);
         m_stunEdit->setPlaceholderText("stun.l.google.com:19302");
 
         m_dtmfCombo = new QComboBox(page);
-        m_dtmfCombo->addItem(tr("Auto"), static_cast<int>(DtmfMethod::Auto));
+        m_dtmfCombo->addItem(tr("Automático"), static_cast<int>(DtmfMethod::Auto));
         m_dtmfCombo->addItem(tr("RFC 2833"), static_cast<int>(DtmfMethod::Rfc2833));
         m_dtmfCombo->addItem(tr("In-Band"), static_cast<int>(DtmfMethod::InBand));
         m_dtmfCombo->addItem(tr("SIP INFO"), static_cast<int>(DtmfMethod::SipInfo));
         int dIdx = m_dtmfCombo->findData(static_cast<int>(m_settings->dtmfMethod));
         if (dIdx >= 0) m_dtmfCombo->setCurrentIndex(dIdx);
 
-        m_rportCheck = new QCheckBox(tr("Enable rport"), page);
+        m_rportCheck = new QCheckBox(tr("Habilitar rport"), page);
         m_rportCheck->setChecked(m_settings->rport);
 
         m_userAgentEdit = new QLineEdit(m_settings->userAgent, page);
 
-        form->addRow(tr("Source Port:"), m_sourcePortSpin);
+        form->addRow(tr("Porta Local SIP:"), m_sourcePortSpin);
         form->addRow("", m_enableStunCheck);
-        form->addRow(tr("STUN Server:"), m_stunEdit);
-        form->addRow(tr("DTMF Method:"), m_dtmfCombo);
+        form->addRow(tr("Servidor STUN:"), m_stunEdit);
+        form->addRow(tr("Método DTMF:"), m_dtmfCombo);
         form->addRow("", m_rportCheck);
         form->addRow(tr("User-Agent:"), m_userAgentEdit);
 
-        tabs->addTab(page, tr("Network & SIP"));
+        tabs->addTab(page, tr("Rede & SIP"));
     }
 
     // --- Tab 3: Calls & UI ---
@@ -252,6 +239,52 @@ SettingsDialog::SettingsDialog(Settings* settings, SipEngine* engine, QWidget* p
     });
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     root->addWidget(buttons);
+}
+
+void SettingsDialog::populateAudioCombos(bool showAdvanced) {
+    QString curRing = m_ringDevCombo->count() > 0 ? m_ringDevCombo->currentData().toString() : m_settings->audioRingDevice;
+    QString curOut  = m_outDevCombo->count() > 0  ? m_outDevCombo->currentData().toString()  : m_settings->audioOutputDevice;
+    QString curIn   = m_inDevCombo->count() > 0   ? m_inDevCombo->currentData().toString()   : m_settings->audioInputDevice;
+
+    m_ringDevCombo->clear();
+    m_outDevCombo->clear();
+    m_inDevCombo->clear();
+
+    m_ringDevCombo->addItem(tr("Padrão do Sistema"), "");
+    m_outDevCombo->addItem(tr("Padrão do Sistema"), "");
+    m_inDevCombo->addItem(tr("Padrão do Sistema"), "");
+
+    QSet<QString> seenOut, seenIn;
+    for (const auto& d : m_engine->audioDevices()) {
+        bool keepForSaved = (!curRing.isEmpty() && d.name == curRing)
+                         || (!curOut.isEmpty()  && d.name == curOut)
+                         || (!curIn.isEmpty()   && d.name == curIn);
+        if (d.isAdvanced && !showAdvanced && !keepForSaved) {
+            continue;
+        }
+        QString label = d.displayName.isEmpty() ? d.name : d.displayName;
+        if (d.outputCount > 0) {
+            if (showAdvanced || !seenOut.contains(label)) {
+                seenOut.insert(label);
+                m_ringDevCombo->addItem(label, d.name);
+                m_outDevCombo->addItem(label, d.name);
+            }
+        }
+        if (d.inputCount > 0) {
+            if (showAdvanced || !seenIn.contains(label)) {
+                seenIn.insert(label);
+                m_inDevCombo->addItem(label, d.name);
+            }
+        }
+    }
+
+    auto selectCombo = [](QComboBox* cb, const QString& val) {
+        int idx = cb->findData(val);
+        if (idx >= 0) cb->setCurrentIndex(idx);
+    };
+    selectCombo(m_ringDevCombo, curRing);
+    selectCombo(m_outDevCombo, curOut);
+    selectCombo(m_inDevCombo, curIn);
 }
 
 void SettingsDialog::applyToSettings() {

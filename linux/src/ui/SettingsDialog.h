@@ -41,6 +41,8 @@ public:
     void applyToSettings();
 
 private:
+    void populateAudioCombos(bool showAdvanced);
+
     Settings* m_settings = nullptr;
     SipEngine* m_engine = nullptr;
 
@@ -48,6 +50,7 @@ private:
     QComboBox* m_ringDevCombo = nullptr;
     QComboBox* m_outDevCombo = nullptr;
     QComboBox* m_inDevCombo = nullptr;
+    QCheckBox* m_showAdvAudioCheck = nullptr;
     QLineEdit* m_ringtoneEdit = nullptr;
     QListWidget* m_codecsList = nullptr;
     QCheckBox* m_vadCheck = nullptr;
