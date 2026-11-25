@@ -23,24 +23,46 @@
 
 #include "core/Types.h"
 #include <QDialog>
+#include <QLabel>
 #include <QLineEdit>
+#include <QPushButton>
+#include <QTimer>
 
 namespace msip {
 
 class IncomingCallDialog : public QDialog {
     Q_OBJECT
 public:
-    explicit IncomingCallDialog(const ActiveCallInfo& call, QWidget* parent = nullptr);
+    explicit IncomingCallDialog(const ActiveCallInfo& call,
+                                const QString& accountLabel = QString(),
+                                QWidget* parent = nullptr);
 
     int callId() const { return m_callId; }
+    void markDismissedByEngine();
 
 signals:
     void answerClicked(int callId);
     void rejectClicked(int callId);
     void forwardClicked(int callId, const QString& dest);
+    void ignoreClicked(int callId);
+
+protected:
+    void closeEvent(QCloseEvent* event) override;
+    void reject() override;
 
 private:
+    void disableActionButtons();
+
     int m_callId = -1;
+    bool m_actionTaken = false;
+    int m_elapsedSecs = 0;
+
+    QTimer* m_ringTimer = nullptr;
+    QLabel* m_timerLbl = nullptr;
+    QPushButton* m_answerBtn = nullptr;
+    QPushButton* m_rejectBtn = nullptr;
+    QPushButton* m_forwardBtn = nullptr;
+    QPushButton* m_ignoreBtn = nullptr;
     QLineEdit* m_forwardEdit = nullptr;
 };
 

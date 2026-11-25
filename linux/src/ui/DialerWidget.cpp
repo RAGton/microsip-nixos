@@ -126,8 +126,17 @@ DialerWidget::DialerWidget(SipEngine* engine, Settings* settings, QWidget* paren
     m_hangupBtn->setEnabled(false);
     connect(m_hangupBtn, &QPushButton::clicked, this, [this]() {
         int id = selectedCallId();
-        if (id >= 0) m_engine->hangupCall(id);
-        else m_engine->hangupAll();
+        if (id >= 0) {
+            for (const auto& c : m_engine->activeCalls()) {
+                if (c.callId == id && SipEngine::isIncomingRinging(c)) {
+                    m_engine->rejectCall(id, 486);
+                    return;
+                }
+            }
+            m_engine->hangupCall(id);
+        } else {
+            m_engine->hangupAll();
+        }
     });
 
     m_redialBtn = new QPushButton(tr("↻"), this);
@@ -288,13 +297,15 @@ void DialerWidget::refreshActiveCalls() {
     m_callCard->style()->polish(m_callCard);
 
     m_hangupBtn->setEnabled(hasCalls);
-    m_holdBtn->setEnabled(hasCalls);
-    m_muteBtn->setEnabled(hasCalls);
-    m_transferBtn->setEnabled(hasCalls);
     m_confBtn->setEnabled(calls.size() > 1);
-    m_recordBtn->setEnabled(hasCalls);
 
     if (!hasCalls) {
+        m_callBtn->setText(tr("📞 Ligar"));
+        m_hangupBtn->setText(tr("✕ Desligar"));
+        m_holdBtn->setEnabled(false);
+        m_muteBtn->setEnabled(false);
+        m_transferBtn->setEnabled(false);
+        m_recordBtn->setEnabled(false);
         m_callTitleLabel->setText(m_engine->isRegistered() ? tr("Pronto para discar") : m_engine->registrationStatusText());
         m_callMetaLabel->setText(m_engine->isRegistered() ? tr("Conta SIP registrada") : tr("Configure ou selecione uma conta no topo"));
         m_holdBtn->setChecked(false);
@@ -307,6 +318,15 @@ void DialerWidget::refreshActiveCalls() {
     int selId = selectedCallId();
     for (const auto& c : calls) {
         if (c.callId == selId) {
+            bool ringingIn = SipEngine::isIncomingRinging(c);
+            bool confirmed = (c.state == PJSIP_INV_STATE_CONFIRMED);
+            m_callBtn->setText(ringingIn ? tr("📞 Atender") : tr("📞 Ligar"));
+            m_hangupBtn->setText(ringingIn ? tr("✕ Recusar") : tr("✕ Desligar"));
+            m_holdBtn->setEnabled(confirmed);
+            m_muteBtn->setEnabled(confirmed);
+            m_transferBtn->setEnabled(confirmed);
+            m_recordBtn->setEnabled(confirmed);
+
             QString who = c.remoteName.isEmpty() ? c.number : QString("%1 (%2)").arg(c.remoteName, c.number);
             QString dur = QString("%1:%2").arg(c.duration / 60, 2, 10, QChar('0')).arg(c.duration % 60, 2, 10, QChar('0'));
             QStringList badges;
@@ -330,6 +350,16 @@ void DialerWidget::refreshActiveCalls() {
 }
 
 void DialerWidget::onCallOrHangupClicked() {
+    int selId = selectedCallId();
+    if (selId >= 0) {
+        for (const auto& c : m_engine->activeCalls()) {
+            if (c.callId == selId && SipEngine::isIncomingRinging(c)) {
+                m_engine->answerCall(selId);
+                return;
+            }
+        }
+    }
+
     QString num = currentNumber();
     if (!num.isEmpty()) {
         m_engine->makeCall(num);

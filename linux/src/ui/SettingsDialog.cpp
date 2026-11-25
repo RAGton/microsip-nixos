@@ -165,9 +165,9 @@ SettingsDialog::SettingsDialog(Settings* settings, SipEngine* engine, QWidget* p
         auto* form = new QFormLayout(page);
 
         m_aaModeCombo = new QComboBox(page);
-        m_aaModeCombo->addItem(tr("Button / Manual"), "button");
-        m_aaModeCombo->addItem(tr("Always Auto-Answer"), "all");
-        m_aaModeCombo->addItem(tr("Disabled"), "");
+        m_aaModeCombo->addItem(tr("Botão / Manual"), "button");
+        m_aaModeCombo->addItem(tr("Sempre Atender Automaticamente"), "all");
+        m_aaModeCombo->addItem(tr("Desativado"), "");
         int aaIdx = m_aaModeCombo->findData(m_settings->autoAnswer);
         if (aaIdx >= 0) m_aaModeCombo->setCurrentIndex(aaIdx);
 
@@ -177,10 +177,10 @@ SettingsDialog::SettingsDialog(Settings* settings, SipEngine* engine, QWidget* p
         m_aaDelaySpin->setSuffix(" s");
 
         m_aaNumberEdit = new QLineEdit(m_settings->autoAnswerNumber, page);
-        m_aaNumberEdit->setPlaceholderText(tr("Optional caller filter"));
+        m_aaNumberEdit->setPlaceholderText(tr("Filtro opcional de número"));
 
         m_fwdNumberEdit = new QLineEdit(m_settings->forwardingNumber, page);
-        m_fwdNumberEdit->setPlaceholderText(tr("Target extension or SIP URI"));
+        m_fwdNumberEdit->setPlaceholderText(tr("Ramal de destino ou URI SIP"));
 
         m_fwdDelaySpin = new QSpinBox(page);
         m_fwdDelaySpin->setRange(0, 120);
@@ -190,12 +190,12 @@ SettingsDialog::SettingsDialog(Settings* settings, SipEngine* engine, QWidget* p
         m_autoHangupSpin = new QSpinBox(page);
         m_autoHangupSpin->setRange(0, 86400);
         m_autoHangupSpin->setValue(m_settings->autoHangUpTime);
-        m_autoHangupSpin->setSuffix(" s (0 = off)");
+        m_autoHangupSpin->setSuffix(tr(" s (0 = desativado)"));
 
-        m_callWaitingCheck = new QCheckBox(tr("Call Waiting"), page);
+        m_callWaitingCheck = new QCheckBox(tr("Chamada em Espera (Call Waiting)"), page);
         m_callWaitingCheck->setChecked(m_settings->callWaiting);
 
-        m_singleModeCheck = new QCheckBox(tr("Single Call Mode"), page);
+        m_singleModeCheck = new QCheckBox(tr("Modo Chamada Única"), page);
         m_singleModeCheck->setChecked(m_settings->singleMode);
 
         m_darkThemeCheck = new QCheckBox(tr("Usar Tema Escuro"), page);

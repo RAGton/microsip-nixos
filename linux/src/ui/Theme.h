@@ -277,6 +277,31 @@ inline QString buildAppStyleSheet(bool dark) {
                 border: none;
                 background-color: transparent;
             }
+            QFrame#incomingHeader {
+                background-color: #1b3124;
+                border-bottom: 1px solid #2e7d32;
+            }
+            QLabel#incomingBadge {
+                color: #4ade80;
+                font-weight: 700;
+                font-size: 12px;
+                background: transparent;
+            }
+            QLabel#incomingTimer {
+                color: #a7f3d0;
+                font-weight: 600;
+                font-size: 12px;
+                background: transparent;
+            }
+            QLabel#incomingCaller {
+                color: #ffffff;
+                background: transparent;
+            }
+            QLabel#incomingSub {
+                color: #9aa5b4;
+                font-size: 12px;
+                background: transparent;
+            }
         )";
     }
 
@@ -455,6 +480,31 @@ inline QString buildAppStyleSheet(bool dark) {
             background-color: #ffffff;
             border-top: 1px solid #dce1e8;
             color: #334155;
+        }
+        QFrame#incomingHeader {
+            background-color: #ecfdf5;
+            border-bottom: 1px solid #86efac;
+        }
+        QLabel#incomingBadge {
+            color: #15803d;
+            font-weight: 700;
+            font-size: 12px;
+            background: transparent;
+        }
+        QLabel#incomingTimer {
+            color: #166534;
+            font-weight: 600;
+            font-size: 12px;
+            background: transparent;
+        }
+        QLabel#incomingCaller {
+            color: #111827;
+            background: transparent;
+        }
+        QLabel#incomingSub {
+            color: #4b5563;
+            font-size: 12px;
+            background: transparent;
         }
     )";
 }

@@ -100,6 +100,8 @@ public:
     QString formatSipUri(const QString& input) const;
     static QString extractNumberFromUri(const QString& uri);
     static QString extractDisplayNameFromUri(const QString& uri);
+    static bool isIncomingRinging(const ActiveCallInfo& call);
+    static QString localizedCallState(int state, bool incoming);
 
     // Ringtone
     void startRingtone();

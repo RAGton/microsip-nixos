@@ -544,6 +544,30 @@ QString SipEngine::extractDisplayNameFromUri(const QString& uri) {
     return {};
 }
 
+bool SipEngine::isIncomingRinging(const ActiveCallInfo& call) {
+    return call.incoming &&
+           (call.state == PJSIP_INV_STATE_INCOMING || call.state == PJSIP_INV_STATE_EARLY);
+}
+
+QString SipEngine::localizedCallState(int state, bool incoming) {
+    switch (state) {
+        case PJSIP_INV_STATE_INCOMING:
+            return QStringLiteral("Tocando...");
+        case PJSIP_INV_STATE_EARLY:
+            return incoming ? QStringLiteral("Tocando...") : QStringLiteral("Chamando...");
+        case PJSIP_INV_STATE_CALLING:
+            return QStringLiteral("Chamando...");
+        case PJSIP_INV_STATE_CONNECTING:
+            return QStringLiteral("Conectando...");
+        case PJSIP_INV_STATE_CONFIRMED:
+            return QStringLiteral("Em chamada");
+        case PJSIP_INV_STATE_DISCONNECTED:
+            return QStringLiteral("Encerrada");
+        default:
+            return {};
+    }
+}
+
 int SipEngine::makeCall(const QString& number) {
     if (!m_running || m_accId == PJSUA_INVALID_ID) return -1;
     QString uriStr = formatSipUri(number);
@@ -570,7 +594,8 @@ int SipEngine::makeCall(const QString& number) {
     rt.info.remoteUri = uriStr;
     rt.info.number = extractNumberFromUri(uriStr);
     rt.info.incoming = false;
-    rt.info.stateText = "Calling...";
+    rt.info.state = PJSIP_INV_STATE_CALLING;
+    rt.info.stateText = "Chamando...";
     rt.startEpoch = QDateTime::currentSecsSinceEpoch();
 
     if (auto c = m_db->findContactByNumber(rt.info.number)) {
@@ -600,7 +625,7 @@ bool SipEngine::answerCall(int callId) {
 
 bool SipEngine::answerFirstIncomingCall() {
     for (const auto& rt : m_calls) {
-        if (rt.info.incoming && rt.info.state == PJSIP_INV_STATE_INCOMING) {
+        if (isIncomingRinging(rt.info)) {
             return answerCall(rt.info.callId);
         }
     }
@@ -957,6 +982,11 @@ void SipEngine::startRingtone() {
         pjmedia_tonegen_play(m_ringTonePort, 1, tones, PJMEDIA_TONEGEN_LOOP);
         if (pjsua_conf_add_port(m_ringPool, m_ringTonePort, &m_ringToneSlot) == PJ_SUCCESS) {
             pjsua_conf_connect(m_ringToneSlot, 0);
+        } else {
+            pjmedia_port_destroy(m_ringTonePort);
+            m_ringTonePort = nullptr;
+            pj_pool_release(m_ringPool);
+            m_ringPool = nullptr;
         }
     }
 }
@@ -983,7 +1013,7 @@ void SipEngine::stopRingtone() {
 
 void SipEngine::stopRingtoneIfNoRinging() {
     for (const auto& rt : m_calls) {
-        if (rt.info.incoming && rt.info.state == PJSIP_INV_STATE_INCOMING) {
+        if (isIncomingRinging(rt.info)) {
             return;
         }
     }
@@ -995,6 +1025,7 @@ void SipEngine::pollTimers() {
 
     int64_t now = QDateTime::currentSecsSinceEpoch();
     bool changed = false;
+    QVector<int> toHangup;
     for (auto it = m_calls.begin(); it != m_calls.end(); ++it) {
         if (it->connectEpoch > 0) {
             int dur = static_cast<int>(now - it->connectEpoch);
@@ -1003,9 +1034,12 @@ void SipEngine::pollTimers() {
                 changed = true;
             }
             if (m_settings->autoHangUpTime > 0 && dur >= m_settings->autoHangUpTime) {
-                hangupCall(it.key());
+                toHangup.push_back(it.key());
             }
         }
+    }
+    for (int id : toHangup) {
+        hangupCall(id);
     }
     if (changed) {
         emit activeCallsChanged();
@@ -1186,7 +1220,7 @@ void SipEngine::handleIncomingCall(int callId, const QString& remoteUri, const Q
     }
     rt.info.incoming = true;
     rt.info.state = PJSIP_INV_STATE_INCOMING;
-    rt.info.stateText = "Incoming";
+    rt.info.stateText = "Tocando...";
     rt.startEpoch = QDateTime::currentSecsSinceEpoch();
     m_calls.insert(callId, rt);
 
@@ -1199,7 +1233,7 @@ void SipEngine::handleIncomingCall(int callId, const QString& remoteUri, const Q
     // Delayed Call Forwarding
     if (m_settings->fwd && !m_settings->forwardingNumber.isEmpty() && m_settings->forwardingDelay > 0) {
         QTimer::singleShot(m_settings->forwardingDelay * 1000, this, [this, callId]() {
-            if (m_calls.contains(callId) && m_calls[callId].info.state == PJSIP_INV_STATE_INCOMING) {
+            if (m_calls.contains(callId) && isIncomingRinging(m_calls[callId].info)) {
                 forwardCall(callId, m_settings->forwardingNumber);
             }
         });
@@ -1213,7 +1247,7 @@ void SipEngine::handleIncomingCall(int callId, const QString& remoteUri, const Q
     if (shouldAA) {
         int delayMs = qMax(0, m_settings->autoAnswerDelay) * 1000;
         QTimer::singleShot(delayMs, this, [this, callId]() {
-            if (m_calls.contains(callId) && m_calls[callId].info.state == PJSIP_INV_STATE_INCOMING) {
+            if (m_calls.contains(callId) && isIncomingRinging(m_calls[callId].info)) {
                 answerCall(callId);
             }
         });
@@ -1236,7 +1270,8 @@ void SipEngine::handleCallState(int callId, int state, const QString& stateText,
 
     auto& rt = m_calls[callId];
     rt.info.state = state;
-    rt.info.stateText = stateText;
+    QString loc = localizedCallState(state, rt.info.incoming);
+    rt.info.stateText = loc.isEmpty() ? stateText : loc;
     if (rt.info.sipCallId.isEmpty()) rt.info.sipCallId = sipCallId;
 
     if (state == PJSIP_INV_STATE_CONFIRMED) {

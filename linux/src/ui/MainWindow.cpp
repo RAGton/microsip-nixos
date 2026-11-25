@@ -33,10 +33,12 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QGridLayout>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QMessageBox>
 #include <QPlainTextEdit>
+#include <QScreen>
 #include <QShortcut>
 #include <QStatusBar>
 #include <QVBoxLayout>
@@ -472,6 +474,14 @@ void MainWindow::closeEvent(QCloseEvent* event) {
         event->ignore();
         return;
     }
+    const auto dialogs = m_ringDialogs.values();
+    m_ringDialogs.clear();
+    for (auto* dlg : dialogs) {
+        if (dlg) {
+            dlg->markDismissedByEngine();
+            dlg->close();
+        }
+    }
     m_settings->save();
     m_engine->shutdown();
     event->accept();
@@ -539,23 +549,52 @@ void MainWindow::onIncomingCall(const ActiveCallInfo& call) {
         m_trayIcon->showMessage(tr("Chamada Recebida"), caller, QSystemTrayIcon::Information, 8000);
     }
 
-    auto* dlg = new IncomingCallDialog(call, this);
+    if (auto* existing = m_ringDialogs.value(call.callId, nullptr)) {
+        existing->show();
+        existing->raise();
+        existing->activateWindow();
+        QApplication::alert(existing);
+        return;
+    }
+
+    QString accLabel = m_settings->activeAccount().effectiveLabel();
+    auto* dlg = new IncomingCallDialog(call, accLabel, nullptr);
     dlg->setAttribute(Qt::WA_DeleteOnClose);
+
+    // Position centered on screen, cascading if multiple calls are ringing simultaneously
+    if (auto* screen = QGuiApplication::primaryScreen()) {
+        QRect avail = screen->availableGeometry();
+        QSize sz = dlg->sizeHint();
+        int offset = m_ringDialogs.size() * 28;
+        int x = avail.x() + (avail.width() - sz.width()) / 2 + offset;
+        int y = avail.y() + (avail.height() - sz.height()) / 2 + offset;
+        x = qBound(avail.left(), x, qMax(avail.left(), avail.right() - sz.width()));
+        y = qBound(avail.top(), y, qMax(avail.top(), avail.bottom() - sz.height()));
+        dlg->move(x, y);
+    }
+
     m_ringDialogs.insert(call.callId, dlg);
 
     connect(dlg, &IncomingCallDialog::answerClicked, m_engine, &SipEngine::answerCall);
     connect(dlg, &IncomingCallDialog::rejectClicked, this, [this](int cid) { m_engine->rejectCall(cid, 486); });
     connect(dlg, &IncomingCallDialog::forwardClicked, m_engine, &SipEngine::forwardCall);
-    connect(dlg, &QObject::destroyed, this, [this, cid = call.callId]() {
-        m_ringDialogs.remove(cid);
+    connect(dlg, &IncomingCallDialog::ignoreClicked, this, [this](int) { m_engine->stopRingtone(); });
+    connect(dlg, &QObject::destroyed, this, [this, cid = call.callId, dlg]() {
+        if (m_ringDialogs.value(cid, nullptr) == dlg) {
+            m_ringDialogs.remove(cid);
+        }
     });
 
     dlg->show();
+    dlg->raise();
+    dlg->activateWindow();
+    QApplication::alert(dlg);
 }
 
 void MainWindow::onCallStateChanged(const ActiveCallInfo& call) {
-    if (call.state != PJSIP_INV_STATE_INCOMING && m_ringDialogs.contains(call.callId)) {
+    if (!SipEngine::isIncomingRinging(call) && m_ringDialogs.contains(call.callId)) {
         if (auto* dlg = m_ringDialogs.take(call.callId)) {
+            dlg->markDismissedByEngine();
             dlg->close();
         }
     }
@@ -564,6 +603,7 @@ void MainWindow::onCallStateChanged(const ActiveCallInfo& call) {
 void MainWindow::onCallEnded(int callId, const CallRecord& record) {
     if (m_ringDialogs.contains(callId)) {
         if (auto* dlg = m_ringDialogs.take(callId)) {
+            dlg->markDismissedByEngine();
             dlg->close();
         }
     }
